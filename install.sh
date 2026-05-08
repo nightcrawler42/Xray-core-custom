@@ -234,8 +234,12 @@ main() {
     echo -e "Binary:   ${GREEN}${XRAY_BIN}${NC}"
     echo -e "Arch:     ${GREEN}${ARCH}${NC}"
     echo ""
-    read -rp "Continue? [y/N] " confirm
-    [[ "$confirm" =~ ^[Yy]$ ]] || { warn "Aborted"; exit 0; }
+    if [[ -t 0 ]]; then
+        read -rp "Continue? [y/N] " confirm
+        [[ "$confirm" =~ ^[Yy]$ ]] || { warn "Aborted"; exit 0; }
+    else
+        info "Non-interactive mode, proceeding automatically"
+    fi
     echo ""
 
     download_xray
@@ -244,12 +248,16 @@ main() {
     verify
 
     echo ""
-    read -rp "Restart panel now? [y/N] " restart_confirm
-    if [[ "$restart_confirm" =~ ^[Yy]$ ]]; then
-        restart_panel
+    if [[ -t 0 ]]; then
+        read -rp "Restart panel now? [y/N] " restart_confirm
+        if [[ "$restart_confirm" =~ ^[Yy]$ ]]; then
+            restart_panel
+        else
+            warn "Remember to restart your panel to apply changes"
+            info "Restart command: ${RESTART_CMD}"
+        fi
     else
-        warn "Remember to restart your panel to apply changes"
-        info "Restart command: ${RESTART_CMD}"
+        restart_panel
     fi
 
     cleanup
