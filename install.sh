@@ -120,9 +120,16 @@ download_xray() {
 
     if ! command -v unzip &>/dev/null; then
         info "Installing unzip..."
-        apt-get update -qq && apt-get install -y -qq unzip >/dev/null 2>&1 \
-            || yum install -y -q unzip >/dev/null 2>&1 \
-            || err "unzip not found and auto-install failed. Run: apt install unzip"
+        if command -v apt-get &>/dev/null; then
+            apt-get update -qq >/dev/null 2>&1
+            apt-get install -y unzip || err "Failed to install unzip via apt"
+        elif command -v yum &>/dev/null; then
+            yum install -y unzip || err "Failed to install unzip via yum"
+        elif command -v apk &>/dev/null; then
+            apk add unzip || err "Failed to install unzip via apk"
+        else
+            err "unzip not found. Install it manually: apt install unzip"
+        fi
     fi
 
     info "Extracting..."
