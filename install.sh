@@ -6,10 +6,10 @@ set -euo pipefail
 # Replaces official xray-core with enhanced version that kills active
 # connections on user removal (no restart needed to disconnect users).
 #
-# Supported panels: Marzban, 3x-ui, x-ui (alireza), PasarGuard
+# Supported panels: Marzban, Marzban Node, 3x-ui, x-ui (alireza), PasarGuard, PasarGuard Node
 #
 # Usage:
-#   bash <(curl -sL https://raw.githubusercontent.com/nightcrawler42/Xray-core/main/install.sh)
+#   sudo bash -c "$(curl -sL https://raw.githubusercontent.com/nightcrawler42/Xray-core/main/install.sh)"
 # ──────────────────────────────────────────────────────────────────────
 
 REPO="nightcrawler42/Xray-core"
@@ -26,8 +26,14 @@ warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 err()  { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 info() { echo -e "${CYAN}[i]${NC} $1"; }
 
-# ── Root check ────────────────────────────────────────────────────────
-[[ $EUID -ne 0 ]] && err "Run as root"
+# ── Root check (auto-elevate) ─────────────────────────────────────────
+if [[ $EUID -ne 0 ]]; then
+    if [[ -f "$0" ]]; then
+        exec sudo bash "$0" "$@"
+    else
+        err "Run as root: sudo bash <(curl -sL ...) or curl ... | sudo bash"
+    fi
+fi
 
 # ── Detect architecture ──────────────────────────────────────────────
 detect_arch() {
@@ -90,10 +96,20 @@ detect_panel() {
         fi
     fi
 
-    # PasarGuard (Docker node)
-    if docker ps 2>/dev/null | grep -q pasarguard; then
-        PANEL="pasarguard"
+    # PasarGuard Node
+    if docker ps 2>/dev/null | grep -q pg-node || [[ -f /opt/pg-node/docker-compose.yml ]]; then
+        PANEL="pasarguard-node"
         XRAY_BIN="/var/lib/pg-node/xray"
+        RESTART_CMD="pasarguard_restart"
+        log "Detected: PasarGuard Node"
+        log "Xray binary: $XRAY_BIN"
+        return
+    fi
+
+    # PasarGuard (main panel or generic)
+    if docker ps 2>/dev/null | grep -q pasarguard || [[ -f /opt/pasarguard/docker-compose.yml ]]; then
+        PANEL="pasarguard"
+        XRAY_BIN="/var/lib/pasarguard/xray"
         RESTART_CMD="pasarguard_restart"
         log "Detected: PasarGuard"
         log "Xray binary: $XRAY_BIN"
