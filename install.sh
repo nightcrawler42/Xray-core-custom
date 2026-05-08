@@ -46,6 +46,19 @@ detect_panel() {
     XRAY_BIN=""
     RESTART_CMD=""
 
+    # Marzban Node (Docker) — check before main Marzban
+    if [[ -f /opt/marzban-node/docker-compose.yml ]] || docker ps 2>/dev/null | grep -q marzban-node; then
+        PANEL="marzban-node"
+        if [[ -f /opt/marzban-node/.env ]]; then
+            XRAY_BIN=$(grep -oP 'XRAY_EXECUTABLE_PATH\s*=\s*"\K[^"]+' /opt/marzban-node/.env 2>/dev/null || true)
+        fi
+        [[ -z "$XRAY_BIN" ]] && XRAY_BIN="/var/lib/marzban-node/xray-core/xray"
+        RESTART_CMD="marzban_node_restart"
+        log "Detected: Marzban Node"
+        log "Xray binary: $XRAY_BIN"
+        return
+    fi
+
     # Marzban (Docker)
     if [[ -f /opt/marzban/docker-compose.yml ]] || docker ps 2>/dev/null | grep -q marzban; then
         PANEL="marzban"
@@ -171,6 +184,18 @@ marzban_restart() {
     log "Marzban restarted"
 }
 
+marzban_node_restart() {
+    if command -v marzban-node &>/dev/null; then
+        marzban-node restart
+    elif [[ -f /opt/marzban-node/docker-compose.yml ]]; then
+        cd /opt/marzban-node && docker compose restart
+    else
+        warn "Could not restart Marzban Node automatically"
+        return
+    fi
+    log "Marzban Node restarted"
+}
+
 pasarguard_restart() {
     local compose_dir=""
     for d in /opt/pasarguard /opt/pg-node /root/pasarguard; do
@@ -201,6 +226,8 @@ restart_panel() {
     info "Restarting panel..."
     if [[ "$RESTART_CMD" == "marzban_restart" ]]; then
         marzban_restart
+    elif [[ "$RESTART_CMD" == "marzban_node_restart" ]]; then
+        marzban_node_restart
     elif [[ "$RESTART_CMD" == "pasarguard_restart" ]]; then
         pasarguard_restart
     else

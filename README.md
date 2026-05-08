@@ -4,7 +4,7 @@ A custom distribution of Xray-core with improved user management, connection han
 
 ## Quick Install
 
-Works with **Marzban**, **3x-ui**, **x-ui (alireza)**, **PasarGuard**, and standalone xray.
+Works with **Marzban**, **Marzban Node**, **3x-ui**, **x-ui (alireza)**, **PasarGuard**, and standalone xray.
 
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/nightcrawler42/Xray-core/main/install.sh)
