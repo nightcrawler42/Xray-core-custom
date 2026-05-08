@@ -114,8 +114,15 @@ download_xray() {
     info "Downloading Xray-${ASSET_NAME}.zip..."
     curl -sL "$DOWNLOAD_URL" -o "$ZIPFILE" || err "Failed to download release binary"
 
-    if ! file "$ZIPFILE" | grep -q "Zip archive"; then
+    if command -v file &>/dev/null && ! file "$ZIPFILE" | grep -q "Zip archive"; then
         err "Downloaded file is not a valid ZIP archive. Release may not have binaries yet."
+    fi
+
+    if ! command -v unzip &>/dev/null; then
+        info "Installing unzip..."
+        apt-get update -qq && apt-get install -y -qq unzip >/dev/null 2>&1 \
+            || yum install -y -q unzip >/dev/null 2>&1 \
+            || err "unzip not found and auto-install failed. Run: apt install unzip"
     fi
 
     info "Extracting..."
