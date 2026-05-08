@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # ──────────────────────────────────────────────────────────────────────
-# Xray-core Patched Installer
-# Replaces official xray-core with patched version that kills active
+# Xray-core Enhanced Installer
+# Replaces official xray-core with enhanced version that kills active
 # connections on user removal (no restart needed to disconnect users).
 #
 # Supported panels: Marzban, 3x-ui, x-ui (alireza), PasarGuard
@@ -12,11 +12,8 @@ set -euo pipefail
 #   bash <(curl -sL https://raw.githubusercontent.com/nightcrawler42/Xray-core/main/install.sh)
 # ──────────────────────────────────────────────────────────────────────
 
-REPO="https://github.com/nightcrawler42/Xray-core.git"
-BRANCH="main"
-BUILD_DIR="/tmp/xray-core-build"
-GO_VERSION="1.23.4"
-GO_MIN_VERSION="1.22"
+REPO="nightcrawler42/Xray-core"
+API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,13 +32,12 @@ info() { echo -e "${CYAN}[i]${NC} $1"; }
 # ── Detect architecture ──────────────────────────────────────────────
 detect_arch() {
     case "$(uname -m)" in
-        x86_64|amd64)  ARCH="amd64" ;;
-        aarch64|arm64) ARCH="arm64" ;;
-        armv7l)        ARCH="arm" ;;
+        x86_64|amd64)  ARCH="amd64"; ASSET_NAME="linux-64" ;;
+        aarch64|arm64) ARCH="arm64"; ASSET_NAME="linux-arm64-v8a" ;;
+        armv7l)        ARCH="arm";   ASSET_NAME="linux-arm32-v7a" ;;
         *)             err "Unsupported architecture: $(uname -m)" ;;
     esac
-    OS="linux"
-    log "Architecture: ${OS}/${ARCH}"
+    log "Architecture: ${ARCH} (asset: Xray-${ASSET_NAME}.zip)"
 }
 
 # ── Detect panel ─────────────────────────────────────────────────────
@@ -69,7 +65,6 @@ detect_panel() {
             XRAY_BIN="/usr/local/x-ui/bin/xray-linux-${ARCH}"
             RESTART_CMD="systemctl restart x-ui"
 
-            # Distinguish 3x-ui vs x-ui
             if [[ -f /usr/local/x-ui/x-ui ]] && /usr/local/x-ui/x-ui --version 2>&1 | grep -qi "3x-ui"; then
                 PANEL="3x-ui"
                 log "Detected: 3x-ui"
@@ -104,40 +99,32 @@ detect_panel() {
     err "No supported panel or xray installation found"
 }
 
-# ── Install Go if needed ─────────────────────────────────────────────
-ensure_go() {
-    if command -v go &>/dev/null; then
-        local ver
-        ver=$(go version | grep -oP '\d+\.\d+' | head -1)
-        if printf '%s\n%s\n' "$GO_MIN_VERSION" "$ver" | sort -V | head -1 | grep -q "$GO_MIN_VERSION"; then
-            log "Go $ver found"
-            return
-        fi
+# ── Download pre-built binary ───────────────────────────────────────
+download_xray() {
+    info "Fetching latest release info..."
+    RELEASE_JSON=$(curl -sL "$API_URL") || err "Failed to fetch release info"
+
+    TAG=$(echo "$RELEASE_JSON" | grep -oP '"tag_name"\s*:\s*"\K[^"]+') || err "Failed to parse release tag"
+    log "Latest release: $TAG"
+
+    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/Xray-${ASSET_NAME}.zip"
+    TMPDIR=$(mktemp -d)
+    ZIPFILE="${TMPDIR}/xray.zip"
+
+    info "Downloading Xray-${ASSET_NAME}.zip..."
+    curl -sL "$DOWNLOAD_URL" -o "$ZIPFILE" || err "Failed to download release binary"
+
+    if ! file "$ZIPFILE" | grep -q "Zip archive"; then
+        err "Downloaded file is not a valid ZIP archive. Release may not have binaries yet."
     fi
 
-    info "Installing Go ${GO_VERSION}..."
-    local go_tar="go${GO_VERSION}.${OS}-${ARCH}.tar.gz"
-    wget -q "https://go.dev/dl/${go_tar}" -O "/tmp/${go_tar}" || err "Failed to download Go"
-    rm -rf /usr/local/go
-    tar -C /usr/local -xzf "/tmp/${go_tar}"
-    rm -f "/tmp/${go_tar}"
-    export PATH="/usr/local/go/bin:$PATH"
-    log "Go ${GO_VERSION} installed"
-}
+    info "Extracting..."
+    unzip -qo "$ZIPFILE" -d "$TMPDIR" || err "Failed to extract archive"
 
-# ── Build patched xray ───────────────────────────────────────────────
-build_xray() {
-    info "Cloning patched Xray-core..."
-    rm -rf "$BUILD_DIR"
-    git clone --depth 1 -b "$BRANCH" "$REPO" "$BUILD_DIR" 2>/dev/null || err "Failed to clone repo"
-
-    info "Building xray-core (this may take a few minutes)..."
-    cd "$BUILD_DIR"
-    CGO_ENABLED=0 go build -o xray -trimpath -ldflags "-s -w" ./main || err "Build failed"
-    log "Build successful"
-
-    NEW_XRAY="${BUILD_DIR}/xray"
+    NEW_XRAY="${TMPDIR}/xray"
+    [[ -f "$NEW_XRAY" ]] || err "xray binary not found in archive"
     chmod +x "$NEW_XRAY"
+    log "Download and extraction complete"
 }
 
 # ── Backup original binary ───────────────────────────────────────────
@@ -180,7 +167,6 @@ pasarguard_restart() {
     done
 
     if [[ -n "$compose_dir" ]]; then
-        # Mount patched binary into container
         local compose_file="${compose_dir}/docker-compose.yml"
         if ! grep -q "$XRAY_BIN:/usr/local/bin/xray" "$compose_file" 2>/dev/null; then
             warn "Add this volume to your node service in ${compose_file}:"
@@ -220,16 +206,15 @@ verify() {
 
 # ── Cleanup ──────────────────────────────────────────────────────────
 cleanup() {
-    rm -rf "$BUILD_DIR"
-    log "Cleaned up build files"
+    [[ -n "${TMPDIR:-}" ]] && rm -rf "$TMPDIR"
+    log "Cleaned up temporary files"
 }
 
 # ── Main ─────────────────────────────────────────────────────────────
 main() {
     echo ""
     echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║  Xray-core Patched Installer                       ║${NC}"
-    echo -e "${CYAN}║  Fix: Kill connections on user removal              ║${NC}"
+    echo -e "${CYAN}║  Xray-core Enhanced Installer                      ║${NC}"
     echo -e "${CYAN}║  github.com/nightcrawler42/Xray-core               ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
     echo ""
@@ -240,14 +225,13 @@ main() {
     echo ""
     echo -e "Panel:    ${GREEN}${PANEL}${NC}"
     echo -e "Binary:   ${GREEN}${XRAY_BIN}${NC}"
-    echo -e "Arch:     ${GREEN}${OS}/${ARCH}${NC}"
+    echo -e "Arch:     ${GREEN}${ARCH}${NC}"
     echo ""
     read -rp "Continue? [y/N] " confirm
     [[ "$confirm" =~ ^[Yy]$ ]] || { warn "Aborted"; exit 0; }
     echo ""
 
-    ensure_go
-    build_xray
+    download_xray
     backup_xray
     replace_xray
     verify
