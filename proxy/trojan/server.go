@@ -236,7 +236,7 @@ func (s *Server) Process(ctx context.Context, network net.Network, conn stat.Con
 
 	if user.Email != "" {
 		var cleanup func()
-		ctx, _, cleanup = s.connTracker.Track(ctx, user.Email)
+		ctx, _, cleanup = s.connTracker.Track(ctx, user.Email, conn)
 		defer cleanup()
 	}
 

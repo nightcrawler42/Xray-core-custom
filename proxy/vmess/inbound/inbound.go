@@ -278,7 +278,7 @@ func (h *Handler) Process(ctx context.Context, network net.Network, connection s
 
 	if request.User.Email != "" {
 		var cleanup func()
-		ctx, _, cleanup = h.connTracker.Track(ctx, request.User.Email)
+		ctx, _, cleanup = h.connTracker.Track(ctx, request.User.Email, connection)
 		defer cleanup()
 	}
 

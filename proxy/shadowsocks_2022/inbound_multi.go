@@ -244,7 +244,7 @@ func (i *MultiUserInbound) NewConnection(ctx context.Context, conn net.Conn, met
 
 	if user.Email != "" {
 		var cleanup func()
-		ctx, _, cleanup = i.connTracker.Track(ctx, user.Email)
+		ctx, _, cleanup = i.connTracker.Track(ctx, user.Email, conn)
 		defer cleanup()
 	}
 
@@ -282,7 +282,7 @@ func (i *MultiUserInbound) NewPacketConnection(ctx context.Context, conn N.Packe
 
 	if user.Email != "" {
 		var cleanup func()
-		ctx, _, cleanup = i.connTracker.Track(ctx, user.Email)
+		ctx, _, cleanup = i.connTracker.Track(ctx, user.Email, conn)
 		defer cleanup()
 	}
 

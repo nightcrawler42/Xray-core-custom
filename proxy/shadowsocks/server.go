@@ -166,7 +166,7 @@ func (s *Server) handleUDPPayload(ctx context.Context, conn stat.Connection, dis
 				if err == nil {
 					inbound.User = request.User
 					if request.User.Email != "" && connCleanup == nil {
-						ctx, _, connCleanup = s.connTracker.Track(ctx, request.User.Email)
+						ctx, _, connCleanup = s.connTracker.Track(ctx, request.User.Email, conn)
 					}
 				}
 			}
@@ -240,7 +240,7 @@ func (s *Server) handleConnection(ctx context.Context, conn stat.Connection, dis
 
 	if request.User.Email != "" {
 		var cleanup func()
-		ctx, _, cleanup = s.connTracker.Track(ctx, request.User.Email)
+		ctx, _, cleanup = s.connTracker.Track(ctx, request.User.Email, conn)
 		defer cleanup()
 	}
 
