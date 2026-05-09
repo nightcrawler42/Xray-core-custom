@@ -189,18 +189,38 @@ replace_xray() {
 
 # ── Ensure Marzban uses our binary path ──────────────────────────────
 ensure_marzban_env() {
-    local env_file="$1"
-    [[ -f "$env_file" ]] || return
+    local panel_dir="$1"
+    local env_file="${panel_dir}/.env"
+    local compose_file="${panel_dir}/docker-compose.yml"
 
-    if grep -q 'XRAY_EXECUTABLE_PATH' "$env_file"; then
-        # Already set — update it to our path
-        sed -i "s|^XRAY_EXECUTABLE_PATH=.*|XRAY_EXECUTABLE_PATH=\"$XRAY_BIN\"|" "$env_file"
-        log "Updated XRAY_EXECUTABLE_PATH in $env_file"
-    else
-        echo "XRAY_EXECUTABLE_PATH=\"$XRAY_BIN\"" >> "$env_file"
-        log "Added XRAY_EXECUTABLE_PATH to $env_file"
+    # Try .env file first
+    if [[ -f "$env_file" ]]; then
+        if grep -q 'XRAY_EXECUTABLE_PATH' "$env_file"; then
+            sed -i "s|^XRAY_EXECUTABLE_PATH=.*|XRAY_EXECUTABLE_PATH=\"$XRAY_BIN\"|" "$env_file"
+            log "Updated XRAY_EXECUTABLE_PATH in $env_file"
+        else
+            echo "XRAY_EXECUTABLE_PATH=\"$XRAY_BIN\"" >> "$env_file"
+            log "Added XRAY_EXECUTABLE_PATH to $env_file"
+        fi
+        NEED_RECREATE=true
+        return
     fi
-    NEED_RECREATE=true
+
+    # No .env — try adding to docker-compose.yml environment section
+    if [[ -f "$compose_file" ]]; then
+        if grep -q 'XRAY_EXECUTABLE_PATH' "$compose_file"; then
+            sed -i "s|XRAY_EXECUTABLE_PATH:.*|XRAY_EXECUTABLE_PATH: \"$XRAY_BIN\"|" "$compose_file"
+            log "Updated XRAY_EXECUTABLE_PATH in $compose_file"
+        else
+            # Add after existing environment entries
+            sed -i "/environment:/a\\      XRAY_EXECUTABLE_PATH: \"$XRAY_BIN\"" "$compose_file"
+            log "Added XRAY_EXECUTABLE_PATH to $compose_file"
+        fi
+        NEED_RECREATE=true
+        return
+    fi
+
+    warn "Could not find .env or docker-compose.yml in $panel_dir"
 }
 
 # ── Panel-specific restart functions ─────────────────────────────────
@@ -319,11 +339,11 @@ main() {
     backup_xray
     replace_xray
 
-    # Ensure Marzban/Marzban-node .env points to our binary
+    # Ensure Marzban/Marzban-node config points to our binary
     if [[ "$PANEL" == "marzban" ]]; then
-        ensure_marzban_env "/opt/marzban/.env"
+        ensure_marzban_env "/opt/marzban"
     elif [[ "$PANEL" == "marzban-node" ]]; then
-        ensure_marzban_env "/opt/marzban-node/.env"
+        ensure_marzban_env "/opt/marzban-node"
     fi
 
     verify
