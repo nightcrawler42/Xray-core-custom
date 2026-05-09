@@ -9,10 +9,10 @@ set -euo pipefail
 # Supported panels: Marzban, Marzban Node, 3x-ui, x-ui (alireza), PasarGuard, PasarGuard Node
 #
 # Usage:
-#   sudo bash -c "$(curl -sL https://raw.githubusercontent.com/nightcrawler42/Xray-core/main/install.sh)"
+#   sudo bash -c "$(curl -sL https://raw.githubusercontent.com/nightcrawler42/Xray-core-custom/main/install.sh)"
 # ──────────────────────────────────────────────────────────────────────
 
-REPO="nightcrawler42/Xray-core"
+REPO="nightcrawler42/Xray-core-custom"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 
 RED='\033[0;31m'
@@ -314,7 +314,7 @@ main() {
     echo ""
     echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║  Xray-core Enhanced Installer                      ║${NC}"
-    echo -e "${CYAN}║  github.com/nightcrawler42/Xray-core               ║${NC}"
+    echo -e "${CYAN}║  github.com/nightcrawler42/Xray-core-custom               ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
     echo ""
 

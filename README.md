@@ -7,7 +7,7 @@ A custom distribution of Xray-core with improved user management, connection han
 Works with **Marzban**, **Marzban Node**, **3x-ui**, **x-ui (alireza)**, **PasarGuard**, **PasarGuard Node**, and standalone xray.
 
 ```bash
-sudo bash -c "$(curl -sL https://raw.githubusercontent.com/nightcrawler42/Xray-core/main/install.sh)"
+sudo bash -c "$(curl -sL https://raw.githubusercontent.com/nightcrawler42/Xray-core-custom/main/install.sh)"
 ```
 
 The script auto-detects your panel, downloads a pre-built binary, backs up the original, and replaces it. Supports `amd64`, `arm64`, and `armv7`.
