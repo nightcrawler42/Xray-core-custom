@@ -187,9 +187,28 @@ replace_xray() {
     log "Replaced xray binary at: $XRAY_BIN"
 }
 
+# ── Ensure Marzban uses our binary path ──────────────────────────────
+ensure_marzban_env() {
+    local env_file="$1"
+    [[ -f "$env_file" ]] || return
+
+    if grep -q 'XRAY_EXECUTABLE_PATH' "$env_file"; then
+        # Already set — update it to our path
+        sed -i "s|^XRAY_EXECUTABLE_PATH=.*|XRAY_EXECUTABLE_PATH=\"$XRAY_BIN\"|" "$env_file"
+        log "Updated XRAY_EXECUTABLE_PATH in $env_file"
+    else
+        echo "XRAY_EXECUTABLE_PATH=\"$XRAY_BIN\"" >> "$env_file"
+        log "Added XRAY_EXECUTABLE_PATH to $env_file"
+    fi
+    NEED_RECREATE=true
+}
+
 # ── Panel-specific restart functions ─────────────────────────────────
 marzban_restart() {
-    if command -v marzban &>/dev/null; then
+    if [[ "${NEED_RECREATE:-}" == "true" ]] && [[ -f /opt/marzban/docker-compose.yml ]]; then
+        info "Env changed, recreating Marzban container..."
+        cd /opt/marzban && docker compose up -d --force-recreate marzban
+    elif command -v marzban &>/dev/null; then
         marzban restart
     elif [[ -f /opt/marzban/docker-compose.yml ]]; then
         cd /opt/marzban && docker compose restart
@@ -201,7 +220,10 @@ marzban_restart() {
 }
 
 marzban_node_restart() {
-    if command -v marzban-node &>/dev/null; then
+    if [[ "${NEED_RECREATE:-}" == "true" ]] && [[ -f /opt/marzban-node/docker-compose.yml ]]; then
+        info "Env changed, recreating Marzban Node container..."
+        cd /opt/marzban-node && docker compose up -d --force-recreate
+    elif command -v marzban-node &>/dev/null; then
         marzban-node restart
     elif [[ -f /opt/marzban-node/docker-compose.yml ]]; then
         cd /opt/marzban-node && docker compose restart
@@ -292,9 +314,18 @@ main() {
     fi
     echo ""
 
+    NEED_RECREATE=false
     download_xray
     backup_xray
     replace_xray
+
+    # Ensure Marzban/Marzban-node .env points to our binary
+    if [[ "$PANEL" == "marzban" ]]; then
+        ensure_marzban_env "/opt/marzban/.env"
+    elif [[ "$PANEL" == "marzban-node" ]]; then
+        ensure_marzban_env "/opt/marzban-node/.env"
+    fi
+
     verify
 
     echo ""
