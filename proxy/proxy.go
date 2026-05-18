@@ -718,7 +718,7 @@ func UnwrapRawConn(conn net.Conn) (net.Conn, stats.Counter, stats.Counter) {
 func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net.Conn, writer buf.Writer, timer *signal.ActivityTimer, inTimer *signal.ActivityTimer) error {
 	readerConn, readCounter, _ := UnwrapRawConn(readerConn)
 	writerConn, _, writeCounter := UnwrapRawConn(writerConn)
-	reader := buf.NewReader(readerConn)
+	reader := buf.NewDeadlineReader(ctx, readerConn, buf.NewReader(readerConn))
 	if runtime.GOOS != "linux" && runtime.GOOS != "android" {
 		return readV(ctx, reader, writer, timer, readCounter)
 	}
@@ -757,7 +757,24 @@ func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net
 			if inTimer != nil {
 				inTimer.SetTimeout(24 * time.Hour)
 			}
+			// Set a read deadline on the source conn so splice unblocks
+			// periodically, allowing us to check ctx cancellation.
+			// Without this, a dead socket can block splice for up to 24h.
+			spliceDone := make(chan struct{})
+			go func() {
+				select {
+				case <-ctx.Done():
+					// Context cancelled — force-unblock the splice
+					// by setting a past deadline on the reader conn.
+					readerConn.SetReadDeadline(time.Now())
+				case <-spliceDone:
+					// Splice finished normally, nothing to do.
+				}
+			}()
 			w, err := tc.ReadFrom(readerConn)
+			// Signal the watcher goroutine to stop, then clear deadline.
+			close(spliceDone)
+			readerConn.SetReadDeadline(time.Time{})
 			if readCounter != nil {
 				readCounter.Add(w) // outbound stats
 			}
@@ -768,6 +785,11 @@ func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net
 				statWriter.Counter.Add(w) // user stats
 			}
 			if err != nil && errors.Cause(err) != io.EOF {
+				// If the error is a timeout caused by our ctx-cancel
+				// deadline, return the ctx error instead.
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				return err
 			}
 			return nil
@@ -793,7 +815,7 @@ func CopyRawConnIfExist(ctx context.Context, readerConn net.Conn, writerConn net
 
 func readV(ctx context.Context, reader buf.Reader, writer buf.Writer, timer signal.ActivityUpdater, readCounter stats.Counter) error {
 	errors.LogDebug(ctx, "CopyRawConn (maybe) readv")
-	if err := buf.Copy(reader, writer, buf.UpdateActivity(timer), buf.AddToStatCounter(readCounter)); err != nil {
+	if err := buf.CopyCtx(ctx, reader, writer, buf.UpdateActivity(timer), buf.AddToStatCounter(readCounter)); err != nil {
 		return errors.New("failed to process response").Base(err)
 	}
 	return nil

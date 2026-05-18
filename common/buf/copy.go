@@ -3,6 +3,7 @@ package buf
 import (
 	"context"
 	"io"
+	"net"
 	"time"
 
 	"github.com/xtls/xray-core/common/errors"
@@ -171,4 +172,83 @@ func CopyOnceTimeout(reader Reader, writer Writer, timeout time.Duration) error 
 		return err
 	}
 	return writer.WriteMultiBuffer(mb)
+}
+
+// readDeadlineTimeout is the interval at which DeadlineReader wakes up to
+// check context cancellation. 30 seconds balances responsiveness (context
+// cancel is noticed within 30s) against overhead (one extra syscall every
+// 30s of idle time, negligible vs actual I/O).
+const readDeadlineTimeout = 30 * time.Second
+
+// DeadlineReader wraps a Reader and a net.Conn so that ReadMultiBuffer
+// periodically unblocks via SetReadDeadline. On each timeout it checks
+// whether the context has been cancelled; if so it returns the context
+// error, otherwise it resets the deadline and retries the read.
+//
+// This solves the fundamental problem with CopyCtx: the context check
+// only runs between loop iterations, but ReadMultiBuffer can block
+// forever on a stalled connection, preventing the context from ever
+// being observed.
+type DeadlineReader struct {
+	reader Reader
+	conn   net.Conn
+	ctx    context.Context
+}
+
+// NewDeadlineReader creates a DeadlineReader. The conn MUST be the same
+// connection that the reader ultimately reads from (or a wrapper around
+// it that delegates SetReadDeadline). If conn is nil, the reader is
+// returned unwrapped — this is safe for callers that may not always
+// have a net.Conn available.
+func NewDeadlineReader(ctx context.Context, conn net.Conn, reader Reader) Reader {
+	if conn == nil {
+		return reader
+	}
+	return &DeadlineReader{
+		reader: reader,
+		conn:   conn,
+		ctx:    ctx,
+	}
+}
+
+// ReadMultiBuffer implements Reader. It sets a read deadline before each
+// read attempt. If the read returns a timeout error, it checks ctx and
+// either returns the context error or retries. All other errors
+// (including io.EOF) are returned as-is so the caller sees them
+// unchanged.
+func (r *DeadlineReader) ReadMultiBuffer() (MultiBuffer, error) {
+	for {
+		// Check context before setting deadline — fast path for already-cancelled.
+		select {
+		case <-r.ctx.Done():
+			return nil, r.ctx.Err()
+		default:
+		}
+
+		r.conn.SetReadDeadline(time.Now().Add(readDeadlineTimeout))
+		mb, err := r.reader.ReadMultiBuffer()
+
+		if err != nil {
+			// Distinguish timeout from real errors.
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				// Deadline fired. Check if context wants us to stop.
+				select {
+				case <-r.ctx.Done():
+					return nil, r.ctx.Err()
+				default:
+					// Context still alive — clear deadline and retry.
+					r.conn.SetReadDeadline(time.Time{})
+					continue
+				}
+			}
+			// Real error (EOF, connection reset, etc.) — clear deadline and return.
+			r.conn.SetReadDeadline(time.Time{})
+			return mb, err
+		}
+
+		// Successful read — clear deadline so subsequent writes on the same
+		// conn (if any) are not affected, then return data.
+		r.conn.SetReadDeadline(time.Time{})
+		return mb, nil
+	}
 }
