@@ -20,25 +20,35 @@ type connection struct {
 	conn       *websocket.Conn
 	reader     io.Reader
 	remoteAddr net.Addr
+	done       chan struct{}
 }
 
 func NewConnection(conn *websocket.Conn, remoteAddr net.Addr, extraReader io.Reader, heartbeatPeriod uint32) *connection {
+	c := &connection{
+		conn:       conn,
+		remoteAddr: remoteAddr,
+		reader:     extraReader,
+		done:       make(chan struct{}),
+	}
+
 	if heartbeatPeriod != 0 {
 		go func() {
+			ticker := time.NewTicker(time.Duration(heartbeatPeriod) * time.Second)
+			defer ticker.Stop()
 			for {
-				time.Sleep(time.Duration(heartbeatPeriod) * time.Second)
-				if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Time{}); err != nil {
-					break
+				select {
+				case <-c.done:
+					return
+				case <-ticker.C:
+					if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Time{}); err != nil {
+						return
+					}
 				}
 			}
 		}()
 	}
 
-	return &connection{
-		conn:       conn,
-		remoteAddr: remoteAddr,
-		reader:     extraReader,
-	}
+	return c
 }
 
 // Read implements net.Conn.Read()
@@ -87,6 +97,12 @@ func (c *connection) WriteMultiBuffer(mb buf.MultiBuffer) error {
 }
 
 func (c *connection) Close() error {
+	select {
+	case <-c.done:
+	default:
+		close(c.done)
+	}
+
 	var errs []interface{}
 	if err := c.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second*5)); err != nil {
 		errs = append(errs, err)

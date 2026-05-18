@@ -351,7 +351,7 @@ func (s *Server) handleConnection(ctx context.Context, sessionPolicy policy.Sess
 
 	requestDone := func() error {
 		defer timer.SetTimeout(sessionPolicy.Timeouts.DownlinkOnly)
-		if buf.Copy(clientReader, link.Writer, buf.UpdateActivity(timer)) != nil {
+		if buf.CopyCtx(ctx, clientReader, link.Writer, buf.UpdateActivity(timer)) != nil {
 			return errors.New("failed to transfer request").Base(err)
 		}
 		return nil
@@ -360,7 +360,7 @@ func (s *Server) handleConnection(ctx context.Context, sessionPolicy policy.Sess
 	responseDone := func() error {
 		defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
 
-		if err := buf.Copy(link.Reader, clientWriter, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, link.Reader, clientWriter, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to write response").Base(err)
 		}
 		return nil
@@ -538,7 +538,7 @@ func (s *Server) fallback(ctx context.Context, err error, sessionPolicy policy.S
 				return errors.New("failed to set PROXY protocol v", fb.Xver).Base(err).AtWarning()
 			}
 		}
-		if err := buf.Copy(reader, serverWriter, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, reader, serverWriter, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to fallback request payload").Base(err).AtInfo()
 		}
 		return nil
@@ -548,7 +548,7 @@ func (s *Server) fallback(ctx context.Context, err error, sessionPolicy policy.S
 
 	getResponse := func() error {
 		defer timer.SetTimeout(sessionPolicy.Timeouts.UplinkOnly)
-		if err := buf.Copy(serverReader, writer, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, serverReader, writer, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to deliver response payload").Base(err).AtInfo()
 		}
 		return nil

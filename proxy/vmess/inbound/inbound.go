@@ -300,7 +300,7 @@ func (h *Handler) Process(ctx context.Context, network net.Network, connection s
 		if err != nil {
 			return errors.New("failed to start decoding").Base(err)
 		}
-		if err := buf.Copy(bodyReader, link.Writer, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, bodyReader, link.Writer, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to transfer request").Base(err)
 		}
 		return nil

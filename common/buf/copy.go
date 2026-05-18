@@ -1,6 +1,7 @@
 package buf
 
 import (
+	"context"
 	"io"
 	"time"
 
@@ -107,6 +108,31 @@ func copyInternal(reader Reader, writer Writer, handler *copyHandler) error {
 	}
 }
 
+func copyInternalCtx(ctx context.Context, reader Reader, writer Writer, handler *copyHandler) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		buffer, err := reader.ReadMultiBuffer()
+		if !buffer.IsEmpty() {
+			for _, handler := range handler.onData {
+				handler(buffer)
+			}
+
+			if werr := writer.WriteMultiBuffer(buffer); werr != nil {
+				return writeError{werr}
+			}
+		}
+
+		if err != nil {
+			return readError{err}
+		}
+	}
+}
+
 // Copy dumps all payload from reader to writer or stops when an error occurs. It returns nil when EOF.
 func Copy(reader Reader, writer Writer, options ...CopyOption) error {
 	var handler copyHandler
@@ -115,6 +141,19 @@ func Copy(reader Reader, writer Writer, options ...CopyOption) error {
 	}
 	err := copyInternal(reader, writer, &handler)
 	if err != nil && errors.Cause(err) != io.EOF {
+		return err
+	}
+	return nil
+}
+
+// CopyCtx is like Copy but respects context cancellation.
+func CopyCtx(ctx context.Context, reader Reader, writer Writer, options ...CopyOption) error {
+	var handler copyHandler
+	for _, option := range options {
+		option(&handler)
+	}
+	err := copyInternalCtx(ctx, reader, writer, &handler)
+	if err != nil && errors.Cause(err) != io.EOF && err != context.Canceled && err != context.DeadlineExceeded {
 		return err
 	}
 	return nil

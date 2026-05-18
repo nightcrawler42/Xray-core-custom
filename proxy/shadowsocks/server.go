@@ -287,7 +287,7 @@ func (s *Server) handleConnection(ctx context.Context, conn stat.Connection, dis
 			return err
 		}
 
-		if err := buf.Copy(link.Reader, responseWriter, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, link.Reader, responseWriter, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to transport all TCP response").Base(err)
 		}
 
@@ -297,7 +297,7 @@ func (s *Server) handleConnection(ctx context.Context, conn stat.Connection, dis
 	requestDone := func() error {
 		defer timer.SetTimeout(sessionPolicy.Timeouts.DownlinkOnly)
 
-		if err := buf.Copy(bodyReader, link.Writer, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, bodyReader, link.Writer, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to transport all TCP request").Base(err)
 		}
 
