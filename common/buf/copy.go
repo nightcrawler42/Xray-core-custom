@@ -190,9 +190,10 @@ const readDeadlineTimeout = 30 * time.Second
 // forever on a stalled connection, preventing the context from ever
 // being observed.
 type DeadlineReader struct {
-	reader Reader
-	conn   net.Conn
-	ctx    context.Context
+	reader  Reader
+	conn    net.Conn
+	ctx     context.Context
+	timeout time.Duration
 }
 
 // NewDeadlineReader creates a DeadlineReader. The conn MUST be the same
@@ -205,10 +206,17 @@ func NewDeadlineReader(ctx context.Context, conn net.Conn, reader Reader) Reader
 		return reader
 	}
 	return &DeadlineReader{
-		reader: reader,
-		conn:   conn,
-		ctx:    ctx,
+		reader:  reader,
+		conn:    conn,
+		ctx:     ctx,
+		timeout: readDeadlineTimeout,
 	}
+}
+
+// SetDeadlineTimeout overrides the internal poll interval. This is intended
+// for tests that cannot afford to wait the default 30 seconds.
+func (r *DeadlineReader) SetDeadlineTimeout(d time.Duration) {
+	r.timeout = d
 }
 
 // ReadMultiBuffer implements Reader. It sets a read deadline before each
@@ -225,7 +233,7 @@ func (r *DeadlineReader) ReadMultiBuffer() (MultiBuffer, error) {
 		default:
 		}
 
-		r.conn.SetReadDeadline(time.Now().Add(readDeadlineTimeout))
+		r.conn.SetReadDeadline(time.Now().Add(r.timeout))
 		mb, err := r.reader.ReadMultiBuffer()
 
 		if err != nil {
