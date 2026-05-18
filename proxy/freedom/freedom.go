@@ -430,7 +430,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 			}
 		}
 
-		if err := buf.Copy(input, writer, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, input, writer, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to process request").Base(err)
 		}
 
@@ -454,7 +454,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 		} else {
 			reader = NewPacketReader(conn, h, defaultRule, UDPOverride, destination)
 		}
-		if err := buf.Copy(reader, output, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, reader, output, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to process response").Base(err)
 		}
 		return nil

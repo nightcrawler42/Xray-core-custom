@@ -129,7 +129,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 			return err.(*errors.Error).AtWarning()
 		}
 
-		if err = buf.Copy(link.Reader, bodyWriter, buf.UpdateActivity(timer)); err != nil {
+		if err = buf.CopyCtx(ctx, link.Reader, bodyWriter, buf.UpdateActivity(timer)); err != nil {
 			return errors.New("failed to transfer request payload").Base(err).AtInfo()
 		}
 
@@ -147,7 +147,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 		} else {
 			reader = buf.NewReader(conn)
 		}
-		return buf.Copy(reader, link.Writer, buf.UpdateActivity(timer))
+		return buf.CopyCtx(ctx, reader, link.Writer, buf.UpdateActivity(timer))
 	}
 
 	if newCtx != nil {

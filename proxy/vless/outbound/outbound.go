@@ -366,7 +366,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 				}
 			}
 		}
-		err := buf.Copy(clientReader, serverWriter, buf.UpdateActivity(timer))
+		err := buf.CopyCtx(ctx, clientReader, serverWriter, buf.UpdateActivity(timer))
 		if err != nil {
 			return errors.New("failed to transfer request payload").Base(err).AtInfo()
 		}
@@ -403,7 +403,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 			err = encoding.XtlsRead(serverReader, clientWriter, timer, conn, trafficState, false, ctx)
 		} else {
 			// from serverReader.ReadMultiBuffer to clientWriter.WriteMultiBuffer
-			err = buf.Copy(serverReader, clientWriter, buf.UpdateActivity(timer))
+			err = buf.CopyCtx(ctx, serverReader, clientWriter, buf.UpdateActivity(timer))
 		}
 
 		if err != nil {

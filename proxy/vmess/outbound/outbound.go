@@ -178,7 +178,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 			return err
 		}
 
-		if err := buf.Copy(input, bodyWriter, buf.UpdateActivity(timer)); err != nil {
+		if err := buf.CopyCtx(ctx, input, bodyWriter, buf.UpdateActivity(timer)); err != nil {
 			return err
 		}
 
@@ -209,7 +209,7 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 			bodyReader = xudp.NewPacketReader(&buf.BufferedReader{Reader: bodyReader})
 		}
 
-		return buf.Copy(bodyReader, output, buf.UpdateActivity(timer))
+		return buf.CopyCtx(ctx, bodyReader, output, buf.UpdateActivity(timer))
 	}
 
 	if newCtx != nil {

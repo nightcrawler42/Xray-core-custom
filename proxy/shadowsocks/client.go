@@ -131,7 +131,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 				return err
 			}
 
-			return buf.Copy(link.Reader, bodyWriter, buf.UpdateActivity(timer))
+			return buf.CopyCtx(ctx, link.Reader, bodyWriter, buf.UpdateActivity(timer))
 		}
 
 		responseDone := func() error {
@@ -142,7 +142,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 				return err
 			}
 
-			return buf.Copy(responseReader, link.Writer, buf.UpdateActivity(timer))
+			return buf.CopyCtx(ctx, responseReader, link.Writer, buf.UpdateActivity(timer))
 		}
 
 		responseDoneAndCloseWriter := task.OnSuccess(responseDone, task.Close(link.Writer))
@@ -163,7 +163,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 				Request: request,
 			}
 
-			if err := buf.Copy(link.Reader, writer, buf.UpdateActivity(timer)); err != nil {
+			if err := buf.CopyCtx(ctx, link.Reader, writer, buf.UpdateActivity(timer)); err != nil {
 				return errors.New("failed to transport all UDP request").Base(err)
 			}
 			return nil
@@ -177,7 +177,7 @@ func (c *Client) Process(ctx context.Context, link *transport.Link, dialer inter
 				User:   user,
 			}
 
-			if err := buf.Copy(reader, link.Writer, buf.UpdateActivity(timer)); err != nil {
+			if err := buf.CopyCtx(ctx, reader, link.Writer, buf.UpdateActivity(timer)); err != nil {
 				return errors.New("failed to transport all UDP response").Base(err)
 			}
 			return nil

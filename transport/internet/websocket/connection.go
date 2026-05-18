@@ -40,7 +40,7 @@ func NewConnection(conn *websocket.Conn, remoteAddr net.Addr, extraReader io.Rea
 				case <-c.done:
 					return
 				case <-ticker.C:
-					if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Time{}); err != nil {
+					if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(10*time.Second)); err != nil {
 						return
 					}
 				}
