@@ -83,12 +83,16 @@ func (d *DefaultSystemDialer) Dial(ctx context.Context, src net.Address, dest ne
 			Dest:       destAddr,
 		}, nil
 	}
-	// Chrome defaults
+	// Aggressive TCP keepalive: detect a silently-dead target server in
+	// ~75s (15s idle + 4×15s probes) so the relay goroutine unblocks and
+	// releases its socket FD, instead of leaking until TCP retransmits
+	// exhaust (~15min) or forever. A live idle target auto-answers the
+	// probes, so legitimate idle connections are kept.
 	keepAliveConfig := net.KeepAliveConfig{
 		Enable:   true,
-		Idle:     45 * time.Second,
-		Interval: 45 * time.Second,
-		Count:    -1,
+		Idle:     15 * time.Second,
+		Interval: 15 * time.Second,
+		Count:    4,
 	}
 	keepAlive := time.Duration(0)
 	if sockopt != nil {

@@ -390,10 +390,15 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	var newCancel context.CancelFunc
 	if session.TimeoutOnlyFromContext(ctx) {
 		newCtx, newCancel = context.WithCancel(context.Background())
+		defer newCancel()
 	}
 
 	plcy := h.policy()
 	ctx, cancel := context.WithCancel(ctx)
+	// Always cancel on return: releases the context's resources and the
+	// inactivity-timer goroutine, and unblocks any sibling copy goroutine
+	// that task.Run abandoned when the other direction errored first.
+	defer cancel()
 	timer := signal.CancelAfterInactivity(ctx, func() {
 		cancel()
 		if newCancel != nil {
